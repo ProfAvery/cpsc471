@@ -6,8 +6,22 @@ import hashlib
 
 PORT = 7037
 
+SIZE_1_KiB = 1024
+SIZE_32_KiB = 32 * SIZE_1_KiB
+
 # per <https://en.wikipedia.org/wiki/User_Datagram_Protocol>
 MAX_UDP_PAYLOAD = 65507
+
+
+class Section:
+    MAX_SECTION_SIZE = SIZE_32_KiB
+
+    def __init__(self, num, size, digest):
+        self.num = int(num)
+        self.size = int(size)
+        self.digest = digest
+        self.from_byte = self.num * self.MAX_SECTION_SIZE
+        self.to_byte = (self.num + 1) * self.MAX_SECTION_SIZE
 
 
 def md5(data):
@@ -29,21 +43,17 @@ def list_sections(hostname):
     lines = response.decode().splitlines()
 
     file_digest = lines.pop(0)
-
     sections = set()
-    section_info = {}
+    total_size = 0
 
     for line in lines:
-        columns = line.split(maxsplit=3)
+        columns = line.split(maxsplit=2)
 
-        section = int(columns[0])
-        size = int(columns[1])
-        digest = columns[2]
+        s = Section(*columns)
+        sections.add(s)
+        total_size += s.size
 
-        sections.add(section)
-        section_info[section] = {'size': size, 'digest': digest}
-
-    return file_digest, sections, section_info
+    return file_digest, sections, total_size
 
 
 def download_section(n, hostname):
@@ -56,25 +66,22 @@ def usage(program):
 
 
 def main(hostname, filename):
-    expected_file_digest, sections, section_info = list_sections(hostname)
+    expected_file_digest, sections, total_size = list_sections(hostname)
+    file_contents = bytearray(total_size)
 
-    file_contents = bytearray()
-    for i in sections:
-        expected = section_info[i]
-        expected_size = expected['size']
-        expected_digest = expected['digest']
+    for section in sections:
+        print(f'section {section.num}...', end='')
 
-        print(f'section {i}...', end='')
-        data = download_section(i, hostname)
+        data = download_section(section.num, hostname)
         size = len(data)
         digest = md5(data)
 
-        if size != expected_size:
-            print(f'size {size}, expected {expected_size}')
-        elif digest != expected_digest:
-            print(f'digest {digest}, expected {expected_digest}')
+        if size != section.size:
+            print(f'size {size}, expected {section.size}')
+        elif digest != section.digest:
+            print(f'digest {digest}, expected {section.digest}')
         else:
-            file_contents.extend(data)
+            file_contents[section.from_byte:section.to_byte] = data
             print('ok')
 
     file_digest = md5(file_contents)
