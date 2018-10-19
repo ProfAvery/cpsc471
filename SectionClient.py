@@ -4,7 +4,7 @@ import sys
 import socket
 import hashlib
 
-PORT = 7037
+DEFAULT_PORT = 7037
 
 SIZE_1_KiB = 1024
 SIZE_32_KiB = 32 * SIZE_1_KiB
@@ -30,16 +30,24 @@ def md5(data):
     return m.hexdigest()
 
 
-def send_message(message, hostname):
+def parse_address(addr):
+    components = addr.split(':', maxsplit=1)
+    hostname = components[0]
+    port = DEFAULT_PORT if len(components) == 1 else int(components[1])
+
+    return (hostname, port)
+
+
+def send_message(message, hostname, port):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        s.sendto(message.encode(), (hostname, PORT))
+        s.sendto(message.encode(), (hostname, port))
         data, _ = s.recvfrom(MAX_UDP_PAYLOAD)
 
     return data
 
 
-def list_sections(hostname):
-    response = send_message('LIST', hostname)
+def list_sections(hostname, port):
+    response = send_message('LIST', hostname, port)
     lines = response.decode().splitlines()
 
     file_digest = lines.pop(0)
@@ -56,23 +64,25 @@ def list_sections(hostname):
     return file_digest, sections, total_size
 
 
-def download_section(n, hostname):
-    response = send_message(f'SECTION {n}', hostname)
+def download_section(section, hostname, port):
+    response = send_message(f'SECTION {section.num}', hostname, port)
     return response
 
 
 def usage(program):
-    sys.exit(f'Usage: python3 {program} [HOST] [FILE] ')
+    sys.exit(f'Usage: python3 {program} HOST[:PORT] FILE')
 
 
-def main(hostname, filename):
-    expected_file_digest, sections, total_size = list_sections(hostname)
+def main(address, filename):
+    hostname, port = parse_address(address)
+
+    expected_file_digest, sections, total_size = list_sections(hostname, port)
     file_contents = bytearray(total_size)
 
     for section in sections:
         print(f'section {section.num}...', end='')
 
-        data = download_section(section.num, hostname)
+        data = download_section(section, hostname, port)
         size = len(data)
         digest = md5(data)
 
