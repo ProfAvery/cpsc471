@@ -5,6 +5,7 @@ import sys
 import errno
 import socket
 import hashlib
+import platform
 import itertools
 import selectors
 
@@ -12,6 +13,9 @@ DEFAULT_PORT = 7037
 
 SIZE_1_KiB = 1024
 SIZE_32_KiB = 32 * SIZE_1_KiB
+
+WINDOWS = (platform.system() == 'Windows')
+IN_PROGRESS = errno.WSAEWOULDBLOCK if WINDOWS else errno.EINPROGRESS
 
 
 class Section:
@@ -105,8 +109,8 @@ def main(filename, *addresses):
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.setblocking(False)
             err = s.connect_ex(next(servers))
-            if err != errno.EINPROGRESS:
-                print(os.strerror(err))
+            if err != IN_PROGRESS:
+                print(f'connect_ex returned {err}: {os.strerror(err)}')
                 return err
             sel.register(s, selectors.EVENT_READ | selectors.EVENT_WRITE, section)
 
