@@ -114,7 +114,7 @@ def main(filename, *addresses):
                 return err
             sel.register(s, selectors.EVENT_READ | selectors.EVENT_WRITE, section)
 
-            # TODO: use sel to multiplex socket I/O
+        # TODO: use sel to multiplex socket I/O
 
     file_digest = md5(file_contents)
     if file_digest != expected_file_digest:
